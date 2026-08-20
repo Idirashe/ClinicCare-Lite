@@ -1,0 +1,9 @@
+{
+    "00002024": {
+        "name": "Curie M",
+        "email": "test@example.com",
+        "password_hash": "$2b$12$qSUE9dhqS5.15Kj3D2B20.aPAIY0X4/GtvpIRGKC5fxko5cQ/ueyK",
+        "role": "patient",
+        "theme": "colourful"
+    }
+}
