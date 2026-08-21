@@ -44,6 +44,11 @@ class TestEngagementTracker(unittest.TestCase):
         with open(os.path.join(TEST_DATA_DIR, "health_tasks.json"), "w") as f:
             json.dump(tasks, f)
 
+        # get_engagement_summary now also reads appointments.json - it
+        # must exist even in tests that don't care about appointments.
+        with open(os.path.join(TEST_DATA_DIR, "appointments.json"), "w") as f:
+            json.dump({}, f)
+
         # task_A: submitted ON TIME (before due date)
         # task_B: submitted LATE (after due date)
         # task_C: NOT submitted at all
@@ -109,7 +114,7 @@ class TestEngagementTracker(unittest.TestCase):
 
     def tearDown(self):
         """Runs after every test - clean up the test data files."""
-        for filename in ["health_tasks.json", "task_submissions.json"]:
+        for filename in ["health_tasks.json", "task_submissions.json", "appointments.json"]:
             path = os.path.join(TEST_DATA_DIR, filename)
             if os.path.exists(path):
                 os.remove(path)

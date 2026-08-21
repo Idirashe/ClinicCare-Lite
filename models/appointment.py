@@ -20,7 +20,7 @@ APPOINTMENTS_FILE = os.path.join("data", "appointments.json")
 
 class Appointment:
     def __init__(self, appointment_id, patient_id, clinic_id, date, time,
-                 reason, clinician_id=None):
+                 reason, clinician_id=None, attended=None):
         """
         appointment_id: unique string, e.g. "appt_0001"
         patient_id: which patient this is for
@@ -28,10 +28,8 @@ class Appointment:
         date: "YYYY-MM-DD" string
         time: "HH:MM" 24-hour string, e.g. "14:30"
         reason: short administrative label, e.g. "Follow-up check-in"
-                - NOT a place for clinical details, just a scheduling
-                  label so the patient knows what the appointment is
-                  broadly about.
         clinician_id: optional, which clinician it's with
+        attended: None (not yet marked), True (attended), or False (missed)
         """
         self.appointment_id = appointment_id
         self.patient_id = patient_id
@@ -40,6 +38,7 @@ class Appointment:
         self.time = time
         self.reason = reason
         self.clinician_id = clinician_id
+        self.attended = attended
         self.created_at = datetime.now().isoformat()
 
     def is_upcoming(self):
@@ -52,6 +51,10 @@ class Appointment:
             f"{self.date} {self.time}", "%Y-%m-%d %H:%M"
         )
         return appt_datetime >= datetime.now()
+
+    def is_past(self):
+        """Returns True if this appointment's date/time has already passed."""
+        return not self.is_upcoming()
 
     def save(self):
         """
@@ -69,6 +72,7 @@ class Appointment:
                 "time": self.time,
                 "reason": self.reason,
                 "clinician_id": self.clinician_id,
+                "attended": self.attended,
                 "created_at": self.created_at,
             }
             f.seek(0)
@@ -102,3 +106,44 @@ class Appointment:
         # sort key before returning since callers don't need it.
         upcoming.sort(key=lambda item: item[2])
         return [(appt_id, appt) for appt_id, appt, _ in upcoming]
+
+
+    
+    @staticmethod
+    def get_past_for_patient(patient_id):
+        """
+        Return every PAST appointment for this patient, used to
+        calculate on-time attendance statistics for the engagement
+        tracker.
+
+        Returns a list of (appointment_id, appointment_dict) tuples.
+        """
+        with open(APPOINTMENTS_FILE, "r") as f:
+            data = json.load(f)
+
+        now = datetime.now()
+        past = []
+        for appt_id, appt in data.items():
+            if appt["patient_id"] != patient_id:
+                continue
+            appt_datetime = datetime.strptime(
+                f"{appt['date']} {appt['time']}", "%Y-%m-%d %H:%M"
+            )
+            if appt_datetime < now:
+                past.append((appt_id, appt))
+
+        return past
+
+    @staticmethod
+    def mark_attendance(appointment_id, attended):
+        """
+        Mark whether a patient attended a specific past appointment.
+        attended should be True (attended) or False (missed).
+        """
+        with open(APPOINTMENTS_FILE, "r+") as f:
+            data = json.load(f)
+            if appointment_id in data:
+                data[appointment_id]["attended"] = attended
+            f.seek(0)
+            f.truncate()
+            json.dump(data, f, indent=4)

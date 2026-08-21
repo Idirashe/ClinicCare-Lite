@@ -16,8 +16,10 @@ TASKS_FILE = os.path.join("data", "health_tasks.json")
 
 
 class HealthTask:
+       
     def __init__(self, task_id, title, description, due_date, clinic_id,
-                 assigned_patient_id, attachment_path=None):
+                 assigned_patient_id, attachment_path=None,
+                 required_fields=None, field_types=None):
         """
         task_id: unique string ID, e.g. "task_0001"
         title: short name, e.g. "Weekly blood pressure log"
@@ -27,6 +29,15 @@ class HealthTask:
         assigned_patient_id: the patient's user_id this task is for
         attachment_path: optional file the clinician attaches (e.g. a
                           template form) - None if there isn't one
+        required_fields: optional list of column names expected in a
+                          .csv/.txt submission for this task, e.g.
+                          ["date", "reading"]. Leave as None/empty if
+                          this task doesn't need completeness checking
+                          (e.g. PDF-only tasks).
+        field_types: optional dict mapping a column name to a basic
+                      expected format - "date" or "number" - used only
+                      for FORMAT checking, never for interpreting what
+                      the value means. e.g. {"date": "date"}
         """
         self.task_id = task_id
         self.title = title
@@ -35,9 +46,11 @@ class HealthTask:
         self.clinic_id = clinic_id
         self.assigned_patient_id = assigned_patient_id
         self.attachment_path = attachment_path
+        self.required_fields = required_fields or []
+        self.field_types = field_types or {}
         # created_at records when the task was made, useful for sorting
         # and for the "monthly task volume" analytics metric later.
-        self.created_at = datetime.now().isoformat()
+        self.created_at = datetime.now().isoformat() 
 
     def is_overdue(self):
         """
@@ -55,6 +68,8 @@ class HealthTask:
         comment in models/user.py if you want the full explanation of
         why this matters.
         """
+
+    
         with open(TASKS_FILE, "r+") as f:
             data = json.load(f)
             data[self.task_id] = {
@@ -64,6 +79,8 @@ class HealthTask:
                 "clinic_id": self.clinic_id,
                 "assigned_patient_id": self.assigned_patient_id,
                 "attachment_path": self.attachment_path,
+                "required_fields": self.required_fields,
+                "field_types": self.field_types,
                 "created_at": self.created_at,
             }
             f.seek(0)

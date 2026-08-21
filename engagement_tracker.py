@@ -25,9 +25,15 @@ import json
 import os
 from datetime import datetime, timedelta
 
+from models.appointment import Appointment
+
 TASKS_FILE = os.path.join("data", "health_tasks.json")
 SUBMISSIONS_FILE = os.path.join("data", "task_submissions.json")
 
+# Points awarded for each on-time submission and attended appointment.
+
+POINTS_PER_ON_TIME_SUBMISSION = 10
+POINTS_PER_ATTENDED_APPOINTMENT = 5
 
 def _load_patient_task_history(patient_id):
     """
@@ -80,6 +86,38 @@ def _load_patient_task_history(patient_id):
     return history
 
 
+def _get_appointment_attendance_stats(patient_id):
+    """
+    Internal helper: calculate on-time appointment attendance stats
+    for one patient, based on PAST appointments only.
+
+    Returns (attended_count, marked_count).
+    """
+    past_appointments = Appointment.get_past_for_patient(patient_id)
+
+    marked_count = 0
+    attended_count = 0
+    for _, appt in past_appointments:
+        if appt.get("attended") is not None:
+            marked_count += 1
+            if appt["attended"] is True:
+                attended_count += 1
+
+    return attended_count, marked_count
+
+
+def _calculate_engagement_points(on_time_task_count, attended_appointment_count):
+    """
+    Calculate a simple, transparent points total: a fixed number of
+    points per on-time task submission, plus a fixed number per
+    attended appointment.
+    """
+    return (
+        on_time_task_count * POINTS_PER_ON_TIME_SUBMISSION
+        + attended_appointment_count * POINTS_PER_ATTENDED_APPOINTMENT
+    )
+
+
 def get_engagement_summary(patient_id):
     """
     Build the full private engagement summary for one patient.
@@ -123,6 +161,11 @@ def get_engagement_summary(patient_id):
         if datetime.fromisoformat(e["submitted_at"]) >= thirty_days_ago
     ]
 
+    attended_count, marked_count = _get_appointment_attendance_stats(patient_id)
+    attendance_rate = round((attended_count / marked_count) * 100, 1) if marked_count else 0.0
+
+    engagement_points = _calculate_engagement_points(len(on_time), attended_count)
+
     return {
         "total_tasks": total_tasks,
         "completed_tasks": len(completed),
@@ -131,4 +174,8 @@ def get_engagement_summary(patient_id):
         "on_time_rate": on_time_rate,
         "current_on_time_streak": streak,
         "last_30_days_completed": len(recent_completed),
+        "engagement_points": engagement_points,
+        "appointments_attended": attended_count,
+        "appointments_marked": marked_count,
+        "appointment_attendance_rate": attendance_rate,
     }

@@ -10,35 +10,24 @@ treatment - only structural checks (is a field filled in? is the file
 type allowed?) are permitted.
 """
 
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import Flask, render_template, request, session, redirect, url_for, flash, send_file
 import os
+import json
 from dotenv import load_dotenv
 
 from models.user import User
 from models.health_task import HealthTask
-from models.task_submission import TaskSubmission
+from models.task_submission import TaskSubmission, check_form_completeness
 from models.clinic import Clinic
 from patient_routes_snippet import build_patient_dashboard_data
-import json
 
 # Load SECRET_KEY and email credentials from .env before anything else runs.
 load_dotenv()
 
 app = Flask(__name__)
-# The secret key is what Flask uses to cryptographically sign session
-# cookies, so users can't tamper with their own session data (e.g. to
-# fake being a different user_id). Falling back to "dev-key" only
-# matters for quick local testing - always set a real SECRET_KEY in
-# .env before deploying or demoing.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-key-change-me")
 
 
-# ----------------------------------------------------------------------
-# A tiny helper used by several routes below: confirms someone is
-# logged in before letting them see a protected page. Not using Flask
-# extensions like flask-login yet to keep this scaffold dependency-light
-# - feel free to swap in a proper decorator library later if useful.
-# ----------------------------------------------------------------------
 def login_required():
     return "user_id" in session
 
@@ -66,19 +55,16 @@ def register():
         password = request.form["password"]
         role = request.form["role"]  # "clinician" or "patient"
 
-        # Validate ID format for the chosen role.
         if not User.validate_id(user_id, role):
             flash("Invalid ID format for the selected role.")
             return render_template("register.html")
 
-        # Validate password strength.
         if not User.validate_password(password):
             flash("Password must be at least 8 characters and include "
                   "an uppercase letter, a lowercase letter, a digit, "
                   "and a special character (!@#$%^&*).")
             return render_template("register.html")
 
-        # Reject duplicate IDs - two users can't share the same ID.
         if User.load(user_id) is not None:
             flash("An account with this ID already exists.")
             return render_template("register.html")
@@ -103,9 +89,6 @@ def login():
 
     if User.check_password_for_login(user_id, password):
         user_record = User.load(user_id)
-        # Store the essentials in the session - never store the password
-        # or password hash in the session, only what's needed to look
-        # things up later.
         session["user_id"] = user_id
         session["role"] = user_record["role"]
         session["name"] = user_record["name"]
@@ -123,9 +106,7 @@ def logout():
 
 
 # ----------------------------------------------------------------------
-# DASHBOARD ROUTING - sends each role to their own dashboard template.
-# The actual dashboard content/routes are built out by Idirashe
-# (patient) and Jolene (clinician) in their own route files/blueprints.
+# DASHBOARD ROUTING
 # ----------------------------------------------------------------------
 
 @app.route("/dashboard")
@@ -155,7 +136,7 @@ def dashboard():
 
 
 # ----------------------------------------------------------------------
-# PATIENT ROUTES (Done by Idirashe- Member 2: Patient Services, File Handling
+# PATIENT ROUTES (Idirashe - Member 2: Patient Services, File Handling
 # and Engagement Lead)
 # ----------------------------------------------------------------------
 
@@ -172,18 +153,13 @@ def submit_task(task_id):
     still "Pending" (not yet looked at) or "Needs Follow-up" (clinician
     asked for more/updated info). Once a clinician has recorded
     "Reviewed - Normal" or "Escalated", that's treated as a completed
-    decision and resubmission is blocked - overwriting a finalised
-    review silently would undermine the audit trail.
+    decision and resubmission is blocked.
     """
     if "user_id" not in session or session["role"] != "patient":
         return redirect(url_for("index"))
 
     patient_id = session["user_id"]
 
-    # --- Authorisation check: does this task actually belong to this
-    # patient? Without this, anyone logged in as a patient could POST
-    # to /submit_task/<any_task_id> and submit a file against a task
-    # that was never assigned to them. ---
     task_record = None
     with open(os.path.join("data", "health_tasks.json"), "r") as f:
         all_tasks = json.load(f)
@@ -191,12 +167,9 @@ def submit_task(task_id):
         task_record = all_tasks[task_id]
 
     if task_record is None or task_record["assigned_patient_id"] != patient_id:
-        # Deliberately vague message - we don't want to confirm to an
-        # attacker whether a given task_id exists at all.
         flash("That task could not be found or is not assigned to you.")
         return redirect(url_for("dashboard"))
 
-    # --- Resubmission rule check ---
     with open(os.path.join("data", "task_submissions.json"), "r") as f:
         all_submissions = json.load(f)
     existing = all_submissions.get(f"{patient_id}_{task_id}")
@@ -218,10 +191,37 @@ def submit_task(task_id):
     uploaded_file.save(temp_path)
 
     try:
-        submission = TaskSubmission(patient_id, task_id, temp_path)
+        submission = TaskSubmission(
+            patient_id, task_id, temp_path,
+            clinic_id=task_record.get("clinic_id"),
+            original_filename=uploaded_file.filename,
+        )
         submission.save_file()
         submission.save()
-        flash("Your file was submitted successfully.")
+
+        # --- Automated form-completeness check (Section D) ---
+        # Only runs for .csv/.txt files where the task actually defines
+        # required_fields - PDF submissions and tasks with no defined
+        # schema skip this entirely, since there's nothing structured
+        # to check. This is STRUCTURAL only: it reports whether fields
+        # are present/non-empty/correctly formatted, and NEVER comments
+        # on what the values mean.
+        required_fields = task_record.get("required_fields") or []
+        _, ext = os.path.splitext(uploaded_file.filename)
+        if required_fields and ext.lower() in (".csv", ".txt"):
+            field_types = task_record.get("field_types") or {}
+            problems = check_form_completeness(
+                submission.final_file_path, required_fields, field_types
+            )
+            if problems:
+                # Show every issue found, in plain language, so the
+                # patient knows exactly what to fix before resubmitting.
+                for problem in problems:
+                    flash(f"Form check: {problem}")
+            else:
+                flash("Your file was submitted successfully and passed the completeness check.")
+        else:
+            flash("Your file was submitted successfully.")
     except ValueError as error:
         flash(str(error))
     finally:
@@ -229,6 +229,33 @@ def submit_task(task_id):
             os.remove(temp_path)
 
     return redirect(url_for("dashboard"))
+
+
+@app.route("/download_submission/<task_id>")
+def download_submission(task_id):
+    """
+    Let a patient securely download their own previously submitted
+    file. Access is restricted to the task's assigned patient only.
+    """
+    if "user_id" not in session:
+        return redirect(url_for("index"))
+
+    patient_id = session["user_id"]
+
+    with open(os.path.join("data", "task_submissions.json"), "r") as f:
+        all_submissions = json.load(f)
+
+    submission = all_submissions.get(f"{patient_id}_{task_id}")
+    if submission is None or submission["patient_id"] != patient_id:
+        flash("That submission could not be found.")
+        return redirect(url_for("dashboard"))
+
+    file_path = submission["file_path"]
+    if not file_path or not os.path.exists(file_path):
+        flash("The file for this submission is no longer available.")
+        return redirect(url_for("dashboard"))
+
+    return send_file(file_path, as_attachment=True)
 
 
 @app.route("/toggle_theme", methods=["POST"])
@@ -254,14 +281,5 @@ def toggle_theme():
     return redirect(url_for("dashboard"))
 
 
-# ----------------------------------------------------------------------
-# Everyone: add your own routes below this line, or better, split them
-# into Flask Blueprints in separate files once this file starts getting
-# long. 
-# ----------------------------------------------------------------------
-
-
 if __name__ == "__main__":
-    # debug=True gives helpful error pages during development - turn
-    # this off before any real demonstration or deployment.
     app.run(debug=True)
