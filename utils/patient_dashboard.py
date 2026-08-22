@@ -22,7 +22,7 @@ from models.health_task import HealthTask
 from models.task_submission import TaskSubmission
 from models.message import Message
 from models.appointment import Appointment
-from engagement_tracker import get_engagement_summary
+from models.engagement_tracker import get_engagement_summary
 import json
 import os
 

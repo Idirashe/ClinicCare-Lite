@@ -19,13 +19,14 @@ from models.user import User
 from models.health_task import HealthTask
 from models.task_submission import TaskSubmission, check_form_completeness
 from models.clinic import Clinic
-from patient_routes_snippet import build_patient_dashboard_data
+from utils.patient_dashboard import build_patient_dashboard_data
 
 # Load SECRET_KEY and email credentials from .env before anything else runs.
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-key-change-me")
+
 
 
 def login_required():

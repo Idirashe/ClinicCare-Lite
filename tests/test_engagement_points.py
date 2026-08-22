@@ -7,7 +7,7 @@ import unittest
 import json
 import os
 
-from engagement_tracker import get_engagement_summary
+from models.engagement_tracker import get_engagement_summary
 from models.appointment import Appointment
 
 DATA_DIR = "data"

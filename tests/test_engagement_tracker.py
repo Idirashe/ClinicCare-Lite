@@ -15,7 +15,7 @@ import os
 import shutil
 from datetime import datetime
 
-from engagement_tracker import get_engagement_summary
+from models.engagement_tracker import get_engagement_summary
 
 TEST_DATA_DIR = "data"
 
