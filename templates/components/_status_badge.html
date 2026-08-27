@@ -1,0 +1,27 @@
+{#
+    _status_badge.html — reusable status badge.
+
+    WHY THIS EXISTS: task status appears in at least 3 places (patient
+    dashboard, clinician dashboard, analytics). Without this partial,
+    each page would need its own copy of "if status == X show colour Y"
+    logic, and they'd slowly drift out of sync as the app grows.
+
+    USAGE from any page:
+        {% include "components/_status_badge.html" with context %}
+    ...where a variable called `status` is already set in that scope.
+
+    This is purely a DISPLAY label. It never changes what the status
+    actually means - see task_submission.py for the real business logic.
+#}
+{% set badge_map = {
+    "Pending":            ("badge-status-pending",   "bi-hourglass-split"),
+    "Overdue":             ("badge-status-overdue",   "bi-exclamation-triangle-fill"),
+    "Submitted":           ("badge-status-submitted", "bi-upload"),
+    "Reviewed - Normal":  ("badge-status-reviewed",   "bi-check-circle-fill"),
+    "Needs Follow-up":    ("badge-status-followup",  "bi-arrow-repeat"),
+    "Escalated":           ("badge-status-escalated",  "bi-exclamation-octagon-fill"),
+} %}
+{% set style_class, icon = badge_map.get(status, ("bg-secondary", "bi-question-circle")) %}
+<span class="badge {{ style_class }} text-white">
+    <i class="bi {{ icon }}"></i> {{ status }}
+</span>

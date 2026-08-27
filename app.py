@@ -20,6 +20,7 @@ from models.health_task import HealthTask
 from models.task_submission import TaskSubmission, check_form_completeness
 from models.clinic import Clinic
 from utils.patient_dashboard import build_patient_dashboard_data
+from utils.analytics import build_analytics_summary
 
 # Load SECRET_KEY and email credentials from .env before anything else runs.
 load_dotenv()
@@ -280,6 +281,68 @@ def toggle_theme():
         json.dump(data, f, indent=4)
 
     return redirect(url_for("dashboard"))
+
+
+# ----------------------------------------------------------------------
+# ANALYTICS ROUTE (Naomi - Member 4: UI, Analytics, Testing and
+# Deployment Lead) - Section C: Operational analytics dashboard
+# ----------------------------------------------------------------------
+
+@app.route("/analytics")
+def analytics_dashboard():
+    """
+    Clinician-facing operational analytics. Restricted to logged-in
+    CLINICIANS only - a patient hitting this URL directly is redirected
+    away rather than shown clinic-wide data, since that data isn't
+    meant for a patient's eyes even in aggregate form.
+    """
+    if not login_required() or session.get("role") != "clinician":
+        flash("You must be logged in as a clinician to view analytics.")
+        return redirect(url_for("index"))
+
+    clinic_id, clinic_record = Clinic.get_clinic_for_clinician(session["user_id"])
+    if clinic_id is None:
+        flash("No clinic is currently associated with your account.")
+        return redirect(url_for("dashboard"))
+
+    summary = build_analytics_summary(clinic_id)
+    return render_template("analytics_dashboard.html", summary=summary)
+
+
+# ----------------------------------------------------------------------
+# ERROR HANDLERS (Naomi - Member 4) - Section A: Error pages
+# ----------------------------------------------------------------------
+
+@app.errorhandler(404)
+def handle_not_found(error):
+    """Shown when a URL doesn't match any route at all."""
+    return render_template(
+        "error.html", code=404, title="Page not found",
+        message="The page you're looking for doesn't exist or may have moved."
+    ), 404
+
+
+@app.errorhandler(403)
+def handle_forbidden(error):
+    """Shown when a logged-in user tries to access something they're
+    not allowed to (e.g. a patient hitting a clinician-only route)."""
+    return render_template(
+        "error.html", code=403, title="Access denied",
+        message="You don't have permission to view this page."
+    ), 403
+
+
+@app.errorhandler(500)
+def handle_server_error(error):
+    """
+    Shown for unexpected server errors. Deliberately generic wording -
+    never leak internal details (file paths, stack traces) to the
+    user, since that could expose information useful to an attacker.
+    """
+    return render_template(
+        "error.html", code=500, title="Something went wrong",
+        message="An unexpected error occurred on our end. Please try again shortly."
+    ), 500
 
 
 if __name__ == "__main__":

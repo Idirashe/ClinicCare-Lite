@@ -1,0 +1,74 @@
+{#
+    _confirm_dialog.html — reusable CONFIRMATION DIALOGUE (Section A).
+
+    WHY THIS MATTERS: the spec explicitly lists "Confirmation dialogues"
+    as a required UI component. Any action that can't easily be undone
+    (e.g. logging out mid-form, escalating a case, deleting a draft)
+    should ask "are you sure?" before it happens - this stops accidental
+    clicks from causing real problems.
+
+    HOW TO USE THIS from any page/form:
+    1. Include this file once anywhere in the page:
+         {% include "components/_confirm_dialog.html" %}
+    2. On the button that triggers the risky action, instead of letting
+       it submit immediately, point it at the modal:
+         <button type="button" class="btn btn-danger"
+                 data-bs-toggle="modal" data-bs-target="#confirmModal"
+                 data-confirm-message="Escalate this case?"
+                 data-confirm-form-id="escalateForm">
+             Escalate
+         </button>
+    3. Give the REAL form a matching id:
+         <form id="escalateForm" method="POST" action="...">...</form>
+
+    The small script at the bottom wires the button's message into the
+    modal and remembers which form to actually submit once the user
+    clicks "Yes, continue".
+#}
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-question-circle-fill"></i> Please confirm</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="confirmModalMessage">
+                Are you sure you want to continue?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmModalAcceptBtn">Yes, continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// This tiny bit of JS connects ANY button on the page to this ONE
+// shared modal, instead of writing a separate modal for every action.
+document.addEventListener("DOMContentLoaded", function () {
+    var confirmModalEl = document.getElementById("confirmModal");
+    var messageEl = document.getElementById("confirmModalMessage");
+    var acceptBtn = document.getElementById("confirmModalAcceptBtn");
+    var formToSubmit = null;
+
+    // Whenever the modal is ABOUT TO OPEN, read the message and target
+    // form off whichever button triggered it.
+    confirmModalEl.addEventListener("show.bs.modal", function (event) {
+        var triggerButton = event.relatedTarget;
+        var message = triggerButton.getAttribute("data-confirm-message");
+        var formId = triggerButton.getAttribute("data-confirm-form-id");
+        if (message) {
+            messageEl.textContent = message;
+        }
+        formToSubmit = formId ? document.getElementById(formId) : null;
+    });
+
+    // Only when the user clicks "Yes, continue" do we actually submit.
+    acceptBtn.addEventListener("click", function () {
+        if (formToSubmit) {
+            formToSubmit.submit();
+        }
+    });
+});
+</script>
