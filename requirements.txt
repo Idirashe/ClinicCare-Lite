@@ -1,2 +1,12 @@
+<<<<<<< HEAD
 Flask==3.0.3
 bcrypt==4.2.0
+=======
+# ClinicCare-Lite dependencies
+# Install everything with: pip install -r requirements.txt
+
+Flask==3.0.3          # Web framework - runs our app and handles routes/pages
+bcrypt==4.2.0          # Hashes passwords securely so we never store plain text
+python-dotenv==1.0.1   # Loads secret keys/config from a .env file instead of hardcoding them
+plotly==5.24.1          # Draws charts for the clinician analytics dashboard
+>>>>>>> 00a046ae218adcd73966bb33d917246522d56cc9
