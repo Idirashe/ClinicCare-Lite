@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Clinician Dashboard{% endblock %}
+{% block content %}
+<h1>Clinician Dashboard</h1>
+<p>Welcome. This is a placeholder — Member 3 will build out:</p>
+<ul>
+    <li>Health task creation form</li>
+    <li>Submission list with filters (by task, by patient)</li>
+    <li>Review tools (Reviewed - Normal / Needs Follow-up / Escalated)</li>
+    <li>Messaging interface</li>
+</ul>
+<p><a href="{{ url_for('auth.logout') }}">Log out</a></p>
+{% endblock %}
