@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{#
+    analytics_dashboard.html — Section C: Operational analytics dashboard.
+
+    Uses Plotly.js (already listed in requirements.txt) to draw charts
+    straight from the numbers utils/analytics.py computed in Python -
+    Python does the MATH, Plotly just DRAWS what Python already worked out.
+
+    PRIVACY REMINDER shown in the template itself: this page is
+    CLINIC-WIDE aggregate data only. No patient name ever appears here.
+#}
+{% block title %}Analytics - ClinicCare-Lite{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-1">Operational analytics</h1>
+<p class="text-muted mb-4">
+    <i class="bi bi-shield-lock-fill"></i>
+    Clinic-wide totals only — no individual patient is identified here.
+</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="display-6 text-success">{{ summary.task_completion_rate }}%</div>
+                <div class="text-muted small">Task completion rate</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="display-6 text-warning">{{ summary.pending_reviews }}</div>
+                <div class="text-muted small">Pending reviews</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="display-6 text-danger">{{ summary.overdue_task_count }}</div>
+                <div class="text-muted small">Overdue tasks</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                {% if summary.average_review_turnaround_hours is not none %}
+                <div class="display-6 text-primary">{{ summary.average_review_turnaround_hours }}h</div>
+                {% else %}
+                <div class="h6 text-muted mt-3">Not enough data yet</div>
+                {% endif %}
+                <div class="text-muted small">Avg. review turnaround</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-transparent">Monthly appointment volume</div>
+            <div class="card-body">
+                <div id="apptVolumeChart"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-transparent">No-show rate by week (%)</div>
+            <div class="card-body">
+                <div id="noShowChart"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// The numbers below were computed in Python (utils/analytics.py) and
+// passed in through Jinja's |tojson filter, which safely turns a
+// Python list/dict into valid JSON text the browser's JS can read -
+// there's no re-calculation happening here, just drawing.
+
+var monthLabels = {{ summary.monthly_appointment_volume | map(attribute=0) | list | tojson }};
+var monthCounts = {{ summary.monthly_appointment_volume | map(attribute=1) | list | tojson }};
+
+Plotly.newPlot("apptVolumeChart", [{
+    x: monthLabels,
+    y: monthCounts,
+    type: "bar",
+    marker: { color: "#4361ee" }
+}], {
+    margin: { t: 10 },
+    xaxis: { title: "Month" },
+    yaxis: { title: "Appointments" }
+}, { responsive: true });  // responsive:true = chart resizes itself
+                            // on window resize, satisfying Section B
+                            // even inside this analytics page.
+
+var weekLabels = {{ summary.no_show_rate_by_week | map(attribute=0) | list | tojson }};
+var noShowRates = {{ summary.no_show_rate_by_week | map(attribute=1) | list | tojson }};
+
+Plotly.newPlot("noShowChart", [{
+    x: weekLabels,
+    y: noShowRates,
+    type: "scatter",
+    mode: "lines+markers",
+    connectgaps: false,  // leaves a visible GAP for weeks with no
+                          // marked attendance data (null values),
+                          // rather than drawing a misleading flat line
+    marker: { color: "#e63946" }
+}], {
+    margin: { t: 10 },
+    xaxis: { title: "Week starting" },
+    yaxis: { title: "No-show rate (%)" }
+}, { responsive: true });
+</script>
+{% endblock %}

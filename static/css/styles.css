@@ -1,0 +1,323 @@
+/* ======================================================================
+   ClinicCare-Lite — Patient Dashboard Styles
+   ======================================================================
+   Goal: calm, professional, clinical look.
+   Approach: we keep Bootstrap for layout/grid, but override its harsh
+   default colors (bright red/yellow/blue) with a muted healthcare
+   palette. We also add soft shadows and spacing so cards feel like
+   "panels" rather than flat boxes.
+   ====================================================================== */
+
+
+/* ----------------------------------------------------------------------
+   1. COLOR VARIABLES
+   ----------------------------------------------------------------------
+   Defining colors once here means if you ever want to adjust the theme,
+   you only change these values instead of hunting through the file.
+   These apply to LIGHT mode (the default / non-dark theme).
+   ---------------------------------------------------------------------- */
+:root {
+    /* Muted teal-blue for primary actions and top bar (calmer than bright blue) */
+    --clinic-primary: #2b6777;
+    --clinic-primary-dark: #1f4d59;
+
+    /* Soft backgrounds - very light blue-gray instead of stark white/gray */
+    --clinic-bg: #f4f7f9;
+    --clinic-card-bg: #ffffff;
+
+    /* Muted status colors - clinical, not "alarm" colors */
+    --clinic-danger: #c0504d;      /* muted red instead of bright bs-danger */
+    --clinic-danger-bg: #f8e9e8;
+    --clinic-warning: #b8860b;     /* muted amber/gold instead of bright yellow */
+    --clinic-warning-bg: #faf3e0;
+    --clinic-info: #3d7ea6;        /* muted blue instead of bright cyan */
+    --clinic-info-bg: #e8f1f6;
+    --clinic-success: #4a7c59;     /* muted green */
+    --clinic-success-bg: #edf4ee;
+    --clinic-neutral: #6c7a7d;     /* muted gray-teal instead of harsh gray */
+
+    /* Text colors */
+    --clinic-text-primary: #1e2b30;
+    --clinic-text-muted: #5c6b6e;
+
+    /* Borders and shadows */
+    --clinic-border: #dfe6e8;
+    --clinic-shadow: 0 1px 3px rgba(30, 43, 48, 0.08), 0 1px 2px rgba(30, 43, 48, 0.06);
+    --clinic-shadow-hover: 0 4px 10px rgba(30, 43, 48, 0.10);
+}
+
+
+/* ----------------------------------------------------------------------
+   2. DARK MODE OVERRIDES
+   ----------------------------------------------------------------------
+   Your HTML uses data-bs-theme="dark" or "colourful". We hook into
+   Bootstrap's dark mode attribute directly so this works with your
+   existing theme toggle without any JS changes needed.
+   ---------------------------------------------------------------------- */
+[data-bs-theme="dark"] {
+    --clinic-bg: #16232a;
+    --clinic-card-bg: #1e2f38;
+    --clinic-text-primary: #e8eef0;
+    --clinic-text-muted: #9fb0b5;
+    --clinic-border: #2c3e46;
+    --clinic-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --clinic-shadow-hover: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Your "colourful" theme - toned down from the neon gradient to a calmer
+   two-tone blue, still distinct from plain light/dark but not jarring */
+[data-bs-theme="colourful"] {
+    --bs-body-bg: #eef5f9;
+    --bs-body-color: #1e2b30;
+    --clinic-bg: #eef5f9;
+}
+[data-bs-theme="colourful"] .navbar {
+    /* Softer two-tone gradient instead of the neon cyan/blue */
+    background: linear-gradient(90deg, #2b6777 0%, #52a1b5 100%) !important;
+}
+[data-bs-theme="colourful"] .card {
+    border-left: 4px solid var(--clinic-primary);
+}
+
+
+/* ----------------------------------------------------------------------
+   3. BASE PAGE STYLING
+   ---------------------------------------------------------------------- */
+body {
+    background-color: var(--clinic-bg);
+    color: var(--clinic-text-primary);
+    /* Slightly larger base font + more line height = easier to read,
+       especially important for a healthcare audience that may include
+       older or anxious patients */
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.text-muted {
+    color: var(--clinic-text-muted) !important;
+}
+
+
+/* ----------------------------------------------------------------------
+   4. TOP NAVIGATION BAR
+   ----------------------------------------------------------------------
+   Replacing Bootstrap's bg-primary (bright blue) with our muted teal.
+   ---------------------------------------------------------------------- */
+.navbar.bg-primary {
+    background-color: var(--clinic-primary) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+
+/* ----------------------------------------------------------------------
+   5. CARDS (general)
+   ----------------------------------------------------------------------
+   This is the biggest visual upgrade: soft shadows instead of flat
+   borders, slightly rounded corners, consistent background color.
+   ---------------------------------------------------------------------- */
+.card {
+    background-color: var(--clinic-card-bg);
+    border: 1px solid var(--clinic-border);
+    border-radius: 10px;
+    box-shadow: var(--clinic-shadow);
+    transition: box-shadow 0.15s ease;
+}
+
+/* Subtle lift on hover for task/appointment cards - gives a sense of
+   interactivity without being flashy */
+.card:hover {
+    box-shadow: var(--clinic-shadow-hover);
+}
+
+.card-title {
+    font-weight: 600;
+    color: var(--clinic-text-primary);
+}
+
+
+/* ----------------------------------------------------------------------
+   6. STAT CARDS (Overdue / Pending / Total tasks)
+   ----------------------------------------------------------------------
+   These were using raw Bootstrap bg-danger/bg-warning/bg-secondary,
+   which read as "alarm" colors. We override with muted equivalents
+   and add better spacing + a subtle top accent bar for visual interest.
+   ---------------------------------------------------------------------- */
+.card.bg-danger {
+    background-color: var(--clinic-danger) !important;
+    border: none;
+}
+
+.card.bg-warning {
+    background-color: var(--clinic-warning) !important;
+    color: #ffffff !important;
+    border: none;
+}
+/* Bootstrap sets black text on bg-warning by default - override for
+   readability against our darker muted gold */
+.card.bg-warning * {
+    color: #ffffff !important;
+}
+
+.card.bg-secondary {
+    background-color: var(--clinic-neutral) !important;
+    border: none;
+}
+
+/* Stat card numbers - make the count the clear visual focus */
+.card.bg-danger h3,
+.card.bg-warning h3,
+.card.bg-secondary h3 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+
+/* ----------------------------------------------------------------------
+   7. STATUS BADGES (on individual task cards)
+   ----------------------------------------------------------------------
+   Same principle - muted, professional colors instead of bright
+   Bootstrap defaults. Using your existing class names so no HTML
+   changes are needed.
+   ---------------------------------------------------------------------- */
+.badge {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.4em 0.75em;
+    border-radius: 6px;
+}
+
+.status-overdue {
+    background-color: var(--clinic-danger) !important;
+    color: #ffffff;
+}
+
+.status-pending {
+    background-color: var(--clinic-warning-bg) !important;
+    color: var(--clinic-warning) !important;
+    border: 1px solid var(--clinic-warning);
+}
+
+.status-submitted {
+    background-color: var(--clinic-info-bg) !important;
+    color: var(--clinic-info) !important;
+    border: 1px solid var(--clinic-info);
+}
+
+.status-reviewed-normal {
+    background-color: var(--clinic-success) !important;
+    color: #ffffff;
+}
+
+.status-needs-follow-up {
+    background-color: var(--clinic-warning) !important;
+    color: #ffffff;
+}
+
+.status-escalated {
+    background-color: var(--clinic-danger) !important;
+    color: #ffffff;
+}
+
+
+/* ----------------------------------------------------------------------
+   8. ACTIVITY SUMMARY (engagement card)
+   ----------------------------------------------------------------------
+   This card holds personal wellness stats. We give any card using an
+   h5 title (this is currently only your engagement summary card) a
+   colored heading and a soft accent border on the left, so it visually
+   stands out as "private/personal info" rather than a regular task card.
+   ---------------------------------------------------------------------- */
+.card h5.card-title {
+    color: var(--clinic-primary);
+    font-size: 1.1rem;
+}
+
+.card:has(h5.card-title) {
+    border-left: 3px solid var(--clinic-primary);
+}
+
+
+/* ----------------------------------------------------------------------
+   9. ALERTS (info, warning, light)
+   ----------------------------------------------------------------------
+   Softening Bootstrap's alert colors to match the rest of the palette.
+   ---------------------------------------------------------------------- */
+.alert-info {
+    background-color: var(--clinic-info-bg);
+    color: var(--clinic-info);
+    border: 1px solid var(--clinic-info);
+}
+
+.alert-warning {
+    background-color: var(--clinic-warning-bg);
+    color: #6b5109;
+    border: 1px solid var(--clinic-warning);
+}
+
+.alert-light {
+    background-color: var(--clinic-bg);
+    color: var(--clinic-text-muted);
+    border: 1px dashed var(--clinic-border) !important;
+    text-align: center;
+    padding: 1.25rem;
+}
+
+
+/* ----------------------------------------------------------------------
+   10. BUTTONS
+   ----------------------------------------------------------------------
+   Matching buttons to the muted primary color instead of Bootstrap's
+   bright blue.
+   ---------------------------------------------------------------------- */
+.btn-primary {
+    background-color: var(--clinic-primary);
+    border-color: var(--clinic-primary);
+}
+.btn-primary:hover {
+    background-color: var(--clinic-primary-dark);
+    border-color: var(--clinic-primary-dark);
+}
+
+
+/* ----------------------------------------------------------------------
+   11. SECTION HEADINGS (Your health tasks, Upcoming appointments, etc.)
+   ----------------------------------------------------------------------
+   Add a bit of visual separation and weight so each section reads
+   clearly as its own block on the page.
+   ---------------------------------------------------------------------- */
+h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--clinic-text-primary);
+    border-bottom: 2px solid var(--clinic-border);
+    padding-bottom: 0.5rem;
+}
+
+h1 {
+    font-weight: 700;
+    color: var(--clinic-text-primary);
+}
+
+
+/* ----------------------------------------------------------------------
+   12. SPACING TWEAKS
+   ----------------------------------------------------------------------
+   Bootstrap's default spacing is fine but a little tight for a
+   dashboard someone might be reading while stressed/rushed - give
+   everything a bit more breathing room.
+   ---------------------------------------------------------------------- */
+.container {
+    max-width: 900px;
+    padding-top: 0.5rem;
+    padding-bottom: 3rem;
+}
+
+.card-body {
+    padding: 1.25rem 1.5rem;
+}
