@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<!--
+    base.html - the SHARED SKELETON every other page is built on top of.
+
+    WHY A BASE TEMPLATE?
+    Instead of copy-pasting the navbar, alert boxes, and head tags
+    into every single page, every other template "extends" this one
+    and only fills in its own content section. This is what the
+    spec means by "maintainable modular components" - change the
+    navbar once here, and it updates everywhere automatically.
+
+    Section A (User-interface development) + Section B (Responsive
+    design) - Member 4.
+-->
+<html lang="en" data-bs-theme="{{ theme|default('colourful') }}">
+<head>
+    <meta charset="UTF-8">
+    <!-- This viewport tag is REQUIRED for responsive design (Section B).
+         Without it, phones render the page zoomed-out at "desktop width"
+         and the responsive CSS below won't kick in at all. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ClinicCare-Lite{% endblock %}</title>
+
+    <!-- Bootstrap 5 gives us a responsive grid, forms, tables, and
+         buttons for free, matching the spec's suggestion to "use
+         Bootstrap or an equivalent responsive framework." -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
+          rel="stylesheet">
+    <!-- Bootstrap Icons for small visual cues (status badges, nav icons) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css"
+          rel="stylesheet">
+
+    <!-- Our own small stylesheet for theme colours and tweaks that
+         Bootstrap doesn't cover out of the box. -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    {% if session.get('user_id') %}
+    <!-- ================= NAVIGATION MENU ================= -->
+    <!-- navbar-expand-lg means: full horizontal menu on large screens,
+         collapses into a hamburger button on phones/tablets — this is
+         the "responsive navigation" requirement from Section B. -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-heart-pulse-fill"></i> ClinicCare-Lite
+            </a>
+            <!-- This button only appears on small screens (Bootstrap
+                 hides it automatically above the "lg" breakpoint) -->
+            <button class="navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#navMenu"
+                    aria-controls="navMenu" aria-expanded="false"
+                    aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    {% if session.get('role') == 'clinician' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('analytics_dashboard') }}">
+                            <i class="bi bi-bar-chart-fill"></i> Analytics
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    {% if session.get('role') == 'patient' %}
+                    <li class="nav-item">
+                        <!-- Theme toggle button lives in the navbar so
+                             it's reachable from every page, not just
+                             the dashboard. -->
+                        <form method="POST" action="{{ url_for('toggle_theme') }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-light me-2">
+                                <i class="bi bi-palette-fill"></i> Switch theme
+                            </button>
+                        </form>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item d-flex align-items-center text-white me-3">
+                        <i class="bi bi-person-circle me-1"></i> {{ session.get('name') }}
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-sm btn-outline-light" href="{{ url_for('logout') }}">
+                            <i class="bi bi-box-arrow-right"></i> Log out
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <div class="container-fluid px-3 px-md-4">
+
+        <!-- ================= ALERTS / FLASH MESSAGES ================= -->
+        <!-- Flask's flash() messages land here. dismissible + fade means
+             the user gets a close (x) button, matching the "Alerts"
+             requirement in Section A. -->
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle-fill me-2"></i>{{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap's JS bundle powers the collapsible navbar, dismissible
+         alerts, and the confirmation-dialogue modals used on other pages. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

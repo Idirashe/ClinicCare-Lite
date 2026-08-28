@@ -1,0 +1,74 @@
+/*
+    style.css — small custom layer on top of Bootstrap.
+
+    We deliberately keep this file SHORT. Bootstrap already handles
+    95% of responsive/layout work; this file only adds the two things
+    Bootstrap doesn't know about on its own:
+      1. Our "colourful" vs "dark" patient theme colours.
+      2. A couple of small readability tweaks (font size floor, table
+         wrapping) called for in Section B.
+*/
+
+/* ---------- THEME COLOURS ----------
+   data-bs-theme="colourful" / "dark" is set on the <html> tag in
+   base.html from the patient's saved theme preference. Bootstrap 5.3+
+   already understands data-bs-theme="dark" out of the box, so we only
+   need to define our OWN extra theme: "colourful". */
+
+html[data-bs-theme="colourful"] {
+    --bs-body-bg: #fdf6ec;
+    --bs-body-color: #2b2b2b;
+}
+
+html[data-bs-theme="colourful"] .navbar.bg-primary {
+    background: linear-gradient(90deg, #4361ee, #4cc9f0) !important;
+}
+
+html[data-bs-theme="colourful"] .card {
+    border-top: 4px solid #4cc9f0;
+}
+
+/* Dark theme relies mostly on Bootstrap's built-in dark mode, but we
+   nudge the card accent colour so it still feels branded rather than
+   completely generic. */
+html[data-bs-theme="dark"] .card {
+    border-top: 4px solid #4361ee;
+}
+
+/* ---------- READABILITY (Section B: "readable fonts and contrast") ---------- */
+
+body {
+    /* Never let body text shrink below a comfortably readable size,
+       even inside a Bootstrap "small" utility class on a phone. */
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+/* ---------- RESPONSIVE TABLES (Section B: "tables remain usable on
+   smaller screens" + "forms usable without horizontal scrolling") ---------- */
+
+/* On narrow screens, wrap a table in <div class="table-responsive">
+   (Bootstrap already provides this class) so it scrolls INSIDE its own
+   box instead of forcing the WHOLE PAGE to scroll sideways. This rule
+   just makes sure our own tables never fight that behaviour. */
+.table-responsive table {
+    margin-bottom: 0;
+}
+
+/* Status badges used across dashboards - defined once here instead of
+   repeating inline styles on every page. */
+.badge-status-pending      { background-color: #adb5bd; }
+.badge-status-overdue      { background-color: #d90429; }
+.badge-status-submitted    { background-color: #4361ee; }
+.badge-status-reviewed     { background-color: #2a9d8f; }
+.badge-status-followup     { background-color: #f4a261; }
+.badge-status-escalated    { background-color: #e63946; }
+
+/* Small screens: give cards a little breathing room so stacked cards
+   (Bootstrap collapses the grid to 1 column automatically) don't feel
+   cramped edge-to-edge. */
+@media (max-width: 576px) {
+    .card {
+        margin-bottom: 1rem;
+    }
+}
