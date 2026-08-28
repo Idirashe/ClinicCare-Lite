@@ -78,3 +78,24 @@ def notify_review_complete(patient_email, task_title, outcome, notes):
         f"Log in to ClinicCare-Lite to see the full details."
     )
     return send_email(patient_email, subject, body)
+
+def notify_clinician_of_submission(clinic_id, patient_id, task_record):
+    """Look up the clinician for this clinic and email them about a new submission."""
+    import json
+    import os
+    from models.user import User
+
+    with open(os.path.join("data", "clinics.json"), "r") as f:
+        all_clinics = json.load(f)
+    clinic_record = all_clinics.get(clinic_id)
+    if not clinic_record:
+        return
+    clinician_record = User.load(clinic_record["clinician_id"])
+    patient_record = User.load(patient_id)
+    if clinician_record and clinician_record.get("email"):
+        notify_submission_received(
+            clinician_record["email"],
+            patient_record["name"] if patient_record else patient_id,
+            task_record["title"],
+        )
+

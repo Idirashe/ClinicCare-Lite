@@ -16,9 +16,12 @@ import json
 from dotenv import load_dotenv
 
 from models.user import User
+from utils.email_handler import notify_submission_received, notify_review_complete
 from models.health_task import HealthTask
 from models.task_submission import TaskSubmission, check_form_completeness
 from models.clinic import Clinic
+from models.health_task import HealthTask
+from models.message import Message
 from utils.patient_dashboard import build_patient_dashboard_data
 from utils.analytics import build_analytics_summary
 
@@ -117,7 +120,7 @@ def dashboard():
         return redirect(url_for("index"))
 
     if session["role"] == "clinician":
-        return render_template("clinician_dashboard.html", name=session["name"])
+        return clinician_dashboard_view()
 
     # --- Patient branch: gather real dashboard data ---
     dashboard_data = build_patient_dashboard_data(session["user_id"])
@@ -144,19 +147,6 @@ def dashboard():
 
 @app.route("/submit_task/<task_id>", methods=["POST"])
 def submit_task(task_id):
-    """
-    Handle a patient uploading a file for a specific assigned task.
-
-    SECURITY: only allows submission if the task actually belongs to
-    the logged-in patient - this stops anyone from submitting a file
-    to a task_id that isn't theirs, even if they guess or edit the URL.
-
-    RESUBMISSION RULE: a patient may resubmit while their submission is
-    still "Pending" (not yet looked at) or "Needs Follow-up" (clinician
-    asked for more/updated info). Once a clinician has recorded
-    "Reviewed - Normal" or "Escalated", that's treated as a completed
-    decision and resubmission is blocked.
-    """
     if "user_id" not in session or session["role"] != "patient":
         return redirect(url_for("index"))
 
@@ -201,13 +191,6 @@ def submit_task(task_id):
         submission.save_file()
         submission.save()
 
-        # --- Automated form-completeness check (Section D) ---
-        # Only runs for .csv/.txt files where the task actually defines
-        # required_fields - PDF submissions and tasks with no defined
-        # schema skip this entirely, since there's nothing structured
-        # to check. This is STRUCTURAL only: it reports whether fields
-        # are present/non-empty/correctly formatted, and NEVER comments
-        # on what the values mean.
         required_fields = task_record.get("required_fields") or []
         _, ext = os.path.splitext(uploaded_file.filename)
         if required_fields and ext.lower() in (".csv", ".txt"):
@@ -216,14 +199,15 @@ def submit_task(task_id):
                 submission.final_file_path, required_fields, field_types
             )
             if problems:
-                # Show every issue found, in plain language, so the
-                # patient knows exactly what to fix before resubmitting.
                 for problem in problems:
                     flash(f"Form check: {problem}")
             else:
                 flash("Your file was submitted successfully and passed the completeness check.")
         else:
             flash("Your file was submitted successfully.")
+
+        notify_clinician_of_submission(task_record.get("clinic_id"), patient_id, task_record)
+
     except ValueError as error:
         flash(str(error))
     finally:
@@ -231,7 +215,6 @@ def submit_task(task_id):
             os.remove(temp_path)
 
     return redirect(url_for("dashboard"))
-
 
 @app.route("/download_submission/<task_id>")
 def download_submission(task_id):
@@ -343,6 +326,312 @@ def handle_server_error(error):
         "error.html", code=500, title="Something went wrong",
         message="An unexpected error occurred on our end. Please try again shortly."
     ), 500
+
+
+"""
+ROUTES TO ADD TO app.py — Member 3 (Jolene): Clinician Services,
+Messaging and Notification Lead.
+
+HOW TO USE THIS FILE:
+1. Add these two import lines near the top of app.py, next to the
+   existing model imports:
+
+       from models.health_task import HealthTask
+       from models.message import Message
+
+2. Copy everything below the line of dashes into app.py, anywhere
+   after the existing routes (e.g. right after the /analytics route,
+   before the error handlers at the bottom).
+
+3. REPLACE the placeholder clinician branch inside the existing
+   /dashboard route:
+
+       if session["role"] == "clinician":
+           return render_template("clinician_dashboard.html", name=session["name"])
+
+   with:
+
+       if session["role"] == "clinician":
+           return clinician_dashboard_view()
+
+   (This keeps the existing /dashboard URL working, but now shows the
+   real dashboard instead of the placeholder.)
+
+4. Also drop the four new template files (clinician_dashboard.html —
+   overwriting the placeholder, create_task.html, review_submission.html,
+   messages.html, create_announcement.html) into your templates/ folder.
+
+Everything below follows the exact same patterns already used
+elsewhere in app.py: read-modify-write JSON with r+/seek/truncate,
+session-based access control, and flash() for user feedback.
+"""
+
+import json
+import os
+from datetime import datetime
+from flask import render_template, request, session, redirect, url_for, flash
+
+from models.health_task import HealthTask
+from models.message import Message
+from models.clinic import Clinic
+
+
+# ----------------------------------------------------------------------
+# CLINICIAN DASHBOARD (Jolene — Member 3)
+# ----------------------------------------------------------------------
+
+def clinician_dashboard_view():
+    """
+    Builds the real clinician dashboard: clinic info, registered
+    patients, this clinic's health tasks, and pending submissions
+    awaiting review. Called from the /dashboard route above.
+    """
+    clinician_id = session["user_id"]
+    clinic_id, clinic_record = Clinic.get_clinic_for_clinician(clinician_id)
+
+    if clinic_id is None:
+        flash("No clinic is currently associated with your account.")
+        return render_template("clinician_dashboard.html", name=session["name"],
+                                clinic=None, tasks=[], submissions=[],
+                                announcements=[])
+
+    tasks = HealthTask.get_all_for_clinic(clinic_id)
+
+    # Pull every submission for this clinic's tasks so the clinician can
+    # filter/review them. Submissions are keyed "patientID_taskID".
+    with open(os.path.join("data", "task_submissions.json"), "r") as f:
+        all_submissions = json.load(f)
+    task_ids_for_clinic = {task_id for task_id, _ in tasks}
+    submissions = [
+        (key, sub) for key, sub in all_submissions.items()
+        if sub.get("task_id") in task_ids_for_clinic
+    ]
+    # Pending first, so the clinician sees what needs attention immediately.
+    submissions.sort(key=lambda item: item[1].get("review_status") != "Pending")
+
+    announcements = Message.get_announcements(clinic_id)
+
+    return render_template(
+        "clinician_dashboard.html",
+        name=session["name"],
+        clinic=clinic_record,
+        clinic_id=clinic_id,
+        tasks=tasks,
+        submissions=submissions,
+        announcements=announcements,
+    )
+
+
+# ----------------------------------------------------------------------
+# A. HEALTH TASK CREATION & ASSIGNMENT
+# ----------------------------------------------------------------------
+
+@app.route("/create_task", methods=["GET", "POST"])
+def create_task():
+    """
+    Lets a clinician create a health task and assign it to one of
+    their registered patients. GET shows the form; POST creates it.
+    """
+    if not login_required() or session.get("role") != "clinician":
+        flash("You must be logged in as a clinician to create tasks.")
+        return redirect(url_for("index"))
+
+    clinic_id, clinic_record = Clinic.get_clinic_for_clinician(session["user_id"])
+    if clinic_id is None:
+        flash("No clinic is associated with your account.")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        patient_id = request.form["patient_id"]
+
+        # Access control: only allow assigning to a patient who is
+        # actually registered under THIS clinic.
+        if not Clinic.patient_belongs_to_clinic(patient_id, clinic_id):
+            flash("That patient is not registered under your clinic.")
+            return redirect(url_for("create_task"))
+
+        title = request.form["title"]
+        description = request.form["description"]
+        due_date = request.form["due_date"]
+
+        # required_fields is optional — a clinician can leave it blank
+        # for tasks that don't need automated completeness checking
+        # (e.g. a PDF-only submission).
+        raw_fields = request.form.get("required_fields", "")
+        required_fields = [f.strip() for f in raw_fields.split(",") if f.strip()]
+
+        # Generate a simple unique task ID.
+        with open(os.path.join("data", "health_tasks.json"), "r") as f:
+            existing = json.load(f)
+        task_id = f"task_{len(existing) + 1:04d}"
+
+        new_task = HealthTask(
+            task_id=task_id,
+            title=title,
+            description=description,
+            due_date=due_date,
+            clinic_id=clinic_id,
+            assigned_patient_id=patient_id,
+            required_fields=required_fields,
+        )
+        new_task.save()
+
+        flash(f"Task '{title}' created and assigned.")
+        return redirect(url_for("dashboard"))
+
+    # GET: show the form with the clinic's registered patients to choose from.
+    return render_template("create_task.html", patients=clinic_record["patient_ids"])
+
+
+# ----------------------------------------------------------------------
+# B. SUBMISSION REVIEW WORKFLOW
+# ----------------------------------------------------------------------
+
+VALID_OUTCOMES = ("Pending", "Reviewed - Normal", "Needs Follow-up", "Escalated")
+
+
+@app.route("/review_submission/<submission_key>", methods=["GET", "POST"])
+def review_submission(submission_key):
+    """
+    Lets a clinician record a categorical review outcome (never a
+    numeric grade — this is health data) plus optional notes for one
+    patient submission. submission_key is "patientID_taskID".
+    """
+    if not login_required() or session.get("role") != "clinician":
+        flash("You must be logged in as a clinician to review submissions.")
+        return redirect(url_for("index"))
+
+    clinic_id, _ = Clinic.get_clinic_for_clinician(session["user_id"])
+
+    with open(os.path.join("data", "task_submissions.json"), "r") as f:
+        all_submissions = json.load(f)
+    submission = all_submissions.get(submission_key)
+
+    if submission is None:
+        flash("That submission could not be found.")
+        return redirect(url_for("dashboard"))
+
+    # Access control: the submission's task must belong to this clinic.
+    with open(os.path.join("data", "health_tasks.json"), "r") as f:
+        all_tasks = json.load(f)
+    task_record = all_tasks.get(submission["task_id"])
+    if task_record is None or task_record["clinic_id"] != clinic_id:
+        flash("That submission does not belong to your clinic.")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        outcome = request.form["outcome"]
+        notes = request.form.get("notes", "")
+
+        if outcome not in VALID_OUTCOMES:
+            flash("Invalid review outcome selected.")
+            return redirect(url_for("review_submission", submission_key=submission_key))
+
+        with open(os.path.join("data", "task_submissions.json"), "r+") as f:
+            data = json.load(f)
+            data[submission_key]["review_status"] = outcome
+            data[submission_key]["review_notes"] = notes
+            data[submission_key]["reviewer_id"] = session["user_id"]
+            data[submission_key]["reviewed_at"] = datetime.now().isoformat()
+            f.seek(0)
+            f.truncate()
+            json.dump(data, f, indent=4)
+
+        # Notify the patient in-app via a message so they see the
+        # outcome without needing email set up to test the workflow.
+        notification = Message(
+            sender_id=session["user_id"],
+            recipient_id=submission["patient_id"],
+            content=f"Your submission for '{task_record['title']}' has been "
+                     f"reviewed: {outcome}." + (f" Note: {notes}" if notes else ""),
+        )
+        notification.save()
+        patient_record = User.load(submission["patient_id"])
+        if patient_record and patient_record.get("email"):
+            notify_review_complete(patient_record["email"], task_record["title"], outcome, notes)
+
+        flash(f"Review recorded: {outcome}.")
+        return redirect(url_for("dashboard"))
+
+    return render_template("review_submission.html", submission=submission,
+                            task=task_record, submission_key=submission_key,
+                            outcomes=VALID_OUTCOMES)
+
+
+# ----------------------------------------------------------------------
+# C. MESSAGING
+# ----------------------------------------------------------------------
+
+@app.route("/messages/<other_user_id>", methods=["GET", "POST"])
+def messages_view(other_user_id):
+    """
+    Shows (and lets a user post to) a 1-to-1 conversation between the
+    logged-in user and another user (patient<->clinician). Works for
+    both roles since Message.get_conversation() only ever returns
+    messages where the logged-in user is a real participant.
+    """
+    if not login_required():
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        content = request.form.get("content", "").strip()
+        if content:
+            new_message = Message(
+                sender_id=session["user_id"],
+                recipient_id=other_user_id,
+                content=content,
+            )
+            new_message.save()
+        return redirect(url_for("messages_view", other_user_id=other_user_id))
+
+    conversation = Message.get_conversation(session["user_id"], other_user_id)
+    return render_template("messages.html", conversation=conversation,
+                            other_user_id=other_user_id, my_id=session["user_id"])
+
+
+# ----------------------------------------------------------------------
+# E. CLINIC ANNOUNCEMENTS
+# ----------------------------------------------------------------------
+
+@app.route("/create_announcement", methods=["GET", "POST"])
+def create_announcement():
+    """
+    Lets a clinician post a clinic-wide announcement, optionally
+    marked urgent. Stored as a Message with is_announcement=True and
+    recipient_id set to the clinic_id (not a single patient).
+    """
+    if not login_required() or session.get("role") != "clinician":
+        flash("You must be logged in as a clinician to post announcements.")
+        return redirect(url_for("index"))
+
+    clinic_id, _ = Clinic.get_clinic_for_clinician(session["user_id"])
+    if clinic_id is None:
+        flash("No clinic is associated with your account.")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        content = request.form.get("content", "").strip()
+        urgent = request.form.get("urgent") == "on"
+
+        if not content:
+            flash("Announcement text cannot be empty.")
+            return redirect(url_for("create_announcement"))
+
+        prefix = "[URGENT] " if urgent else ""
+        announcement = Message(
+            sender_id=session["user_id"],
+            recipient_id=clinic_id,
+            content=prefix + content,
+            is_announcement=True,
+        )
+        announcement.save()
+
+        flash("Announcement posted.")
+        return redirect(url_for("dashboard"))
+
+    return render_template("create_announcement.html")
+
+
 
 
 if __name__ == "__main__":
